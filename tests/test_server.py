@@ -1,12 +1,13 @@
 import pytest
 import json
+import os
 from src.patronus_mcp.server import mcp, Request, InitRequest, EvaluationRequest, RemoteEvaluatorConfig, ExperimentRequest
 
 @pytest.fixture
 def init_request():
     request = Request(data=InitRequest(
         project_name="MyTest",
-        api_key="test_api_key", 
+        api_key=os.environ.get("PATRONUS_API_KEY"), 
         app="test_app"
     ))
     return {"request": request.model_dump()}
@@ -42,7 +43,7 @@ def experiment_request():
                 explain_strategy="always"
             )
         ],
-        api_key="test_api_key"
+        api_key=os.environ.get("PATRONUS_API_KEY"),
     ))
     return {"request": request.model_dump()}
 
@@ -63,6 +64,3 @@ async def test_run_experiment(experiment_request):
     response_data = json.loads(response[0].text)
     assert response_data["status"] == "success"
     assert "results" in response_data
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"]) 
