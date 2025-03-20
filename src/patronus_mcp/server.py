@@ -25,6 +25,7 @@ class RemoteEvaluatorConfig(BaseModel):
     max_attempts: Optional[int] = 3
 
 class EvaluationRequest(BaseModel):
+    evaluator: RemoteEvaluatorConfig
     system_prompt: Optional[str] = None
     task_context: Union[list[str], str, None] = None
     task_attachments: Union[list[Any], None] = None
@@ -32,7 +33,6 @@ class EvaluationRequest(BaseModel):
     task_output: Optional[str] = None
     gold_answer: Optional[str] = None
     task_metadata: Optional[Dict[str, Any]] = None
-    evaluator: RemoteEvaluatorConfig
 
 class ExperimentRequest(BaseModel):
     project_name: str
@@ -43,6 +43,15 @@ class ExperimentRequest(BaseModel):
     max_concurrency: int = 10
     api_key: Optional[str] = None
 
+class BatchEvaluationRequest(BaseModel):
+    evaluators: List[RemoteEvaluatorConfig]
+    task_input: Optional[str] = None
+    task_output: Optional[str] = None
+    system_prompt: Optional[str] = None
+    task_context: Union[list[str], str, None] = None
+    task_attachments: Union[list[Any], None] = None
+    gold_answer: Optional[str] = None
+    task_metadata: Optional[Dict[str, Any]] = None
 
 @mcp.tool()
 async def initialize(request: Request[InitRequest]):
@@ -135,6 +144,62 @@ async def run_experiment(request: Request[ExperimentRequest]):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+@mcp.tool()
+async def batch_evaluate(request: Request[BatchEvaluationRequest]):
+    try:
+        evaluators = [
+            _create_evaluator(config)
+            for config in request.data.evaluators
+        ]
+        
+        eval_kwargs = {}
+        fields = {
+            "task_input",
+            "task_output",
+            "system_prompt",
+            "task_context",
+            "task_attachments",
+            "gold_answer",
+            "task_metadata"
+        }
+        
+        eval_kwargs.update({
+            field: getattr(request.data, field)
+            for field in fields
+            if getattr(request.data, field) is not None
+        })
+        
+        with patronus.Patronus() as client:
+            results = client.evaluate(
+                evaluators=evaluators,
+                **eval_kwargs
+            )
+            
+            # Convert results to a serializable format
+            results_dict = {
+                "all_succeeded": results.all_succeeded(),
+                "failed_evaluations": [
+                    {
+                        "evaluator": str(eval.evaluator),
+                        "text_output": eval.text_output,
+                        "explanation": getattr(eval, 'explanation', None)
+                    }
+                    for eval in results.failed_evaluations()
+                ],
+                "succeeded_evaluations": [
+                    {
+                        "evaluator": str(eval.evaluator),
+                        "text_output": eval.text_output,
+                        "explanation": getattr(eval, 'explanation', None)
+                    }
+                    for eval in results.succeeded_evaluations()
+                ]
+            }
+            
+            return {"status": "success", "results": results_dict}
+            
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
     print("Starting MCP server with stdio transport")
