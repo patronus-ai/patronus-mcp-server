@@ -1,13 +1,13 @@
 import pytest
 import json
-pytest_plugins = ['pytest_asyncio']
+import os
 from src.patronus_mcp.server import mcp, Request, InitRequest, EvaluationRequest, RemoteEvaluatorConfig, ExperimentRequest
 
 @pytest.fixture
 def init_request():
     request = Request(data=InitRequest(
         project_name="MyTest",
-        api_key="sk-eqFgC8BobGQW6qa7w8xiYKGRzayYoVcsyRqHTNfqGyg",  # prod
+        api_key=os.environ.get("PATRONUS_API_KEY"), 
         app="test_app"
     ))
     return {"request": request.model_dump()}
@@ -43,31 +43,24 @@ def experiment_request():
                 explain_strategy="always"
             )
         ],
-        api_key="sk-eqFgC8BobGQW6qa7w8xiYKGRzayYoVcsyRqHTNfqGyg"
+        api_key=os.environ.get("PATRONUS_API_KEY"),
     ))
     return {"request": request.model_dump()}
 
-@pytest.mark.asyncio
 async def test_initialize(init_request):
     response = await mcp.call_tool("initialize", init_request)
     response_data = json.loads(response[0].text)
     assert response_data["status"] == "success"
-    assert "Patronus initialized with project: patronus_test" in response_data["message"]
+    assert "Patronus initialized with project: MyTest" in response_data["message"]
 
-@pytest.mark.asyncio
 async def test_evaluate(evaluation_request):
     response = await mcp.call_tool("evaluate", evaluation_request)
     response_data = json.loads(response[0].text)
     assert response_data["status"] == "success"
     assert "result" in response_data
 
-@pytest.mark.asyncio
 async def test_run_experiment(experiment_request):
     response = await mcp.call_tool("run_experiment", experiment_request)
     response_data = json.loads(response[0].text)
     assert response_data["status"] == "success"
     assert "results" in response_data
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"]) 
