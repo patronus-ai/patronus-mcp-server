@@ -200,33 +200,11 @@ async def batch_evaluate(request: Request[BatchEvaluationRequest]):
             results_dict = {
                 "all_succeeded": results.all_succeeded(),
                 "failed_evaluations": [
-                    {
-                        "score": getattr(eval, 'score', None),
-                        "pass_": getattr(eval, 'pass_', None),
-                        "text_output": getattr(eval, 'text_output', None),
-                        "metadata": getattr(eval, 'metadata', {}),
-                        "explanation": getattr(eval, 'explanation', None),
-                        "tags": getattr(eval, 'tags', {}),
-                        "dataset_id": getattr(eval, 'dataset_id', None),
-                        "dataset_sample_id": getattr(eval, 'dataset_sample_id', None),
-                        "evaluation_duration": str(getattr(eval, 'evaluation_duration', 0)),
-                        "explanation_duration": str(getattr(eval, 'explanation_duration', 0))
-                    }
+                    eval.model_dump(mode="json")
                     for eval in results.failed_evaluations()
                 ],
                 "succeeded_evaluations": [
-                    {
-                        "score": getattr(eval, 'score', None),
-                        "pass_": getattr(eval, 'pass_', None),
-                        "text_output": getattr(eval, 'text_output', None),
-                        "metadata": getattr(eval, 'metadata', {}),
-                        "explanation": getattr(eval, 'explanation', None),
-                        "tags": getattr(eval, 'tags', {}),
-                        "dataset_id": getattr(eval, 'dataset_id', None),
-                        "dataset_sample_id": getattr(eval, 'dataset_sample_id', None),
-                        "evaluation_duration": str(getattr(eval, 'evaluation_duration', 0)),
-                        "explanation_duration": str(getattr(eval, 'explanation_duration', 0))
-                    }
+                    eval.model_dump(mode="json")
                     for eval in results.succeeded_evaluations()
                 ]
             }
@@ -289,33 +267,11 @@ async def async_batch_evaluate(request: Request[AsyncBatchEvaluationRequest]):
             results_dict = {
                 "all_succeeded": results.all_succeeded(),
                 "failed_evaluations": [
-                    {
-                        "score": getattr(eval, 'score', None),
-                        "pass_": getattr(eval, 'pass_', None),
-                        "text_output": getattr(eval, 'text_output', None),
-                        "metadata": getattr(eval, 'metadata', {}),
-                        "explanation": getattr(eval, 'explanation', None),
-                        "tags": getattr(eval, 'tags', {}),
-                        "dataset_id": getattr(eval, 'dataset_id', None),
-                        "dataset_sample_id": getattr(eval, 'dataset_sample_id', None),
-                        "evaluation_duration": str(getattr(eval, 'evaluation_duration', 0)),
-                        "explanation_duration": str(getattr(eval, 'explanation_duration', 0))
-                    }
+                    eval.model_dump(mode="json")
                     for eval in results.failed_evaluations()
                 ],
                 "succeeded_evaluations": [
-                    {
-                        "score": getattr(eval, 'score', None),
-                        "pass_": getattr(eval, 'pass_', None),
-                        "text_output": getattr(eval, 'text_output', None),
-                        "metadata": getattr(eval, 'metadata', {}),
-                        "explanation": getattr(eval, 'explanation', None),
-                        "tags": getattr(eval, 'tags', {}),
-                        "dataset_id": getattr(eval, 'dataset_id', None),
-                        "dataset_sample_id": getattr(eval, 'dataset_sample_id', None),
-                        "evaluation_duration": str(getattr(eval, 'evaluation_duration', 0)),
-                        "explanation_duration": str(getattr(eval, 'explanation_duration', 0))
-                    }
+                    eval.model_dump(mode="json")
                     for eval in results.succeeded_evaluations()
                 ]
             }
