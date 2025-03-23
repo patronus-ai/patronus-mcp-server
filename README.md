@@ -1,12 +1,14 @@
 # Patronus MCP Server
 
-A FastMCP server implementation for the Patronus SDK, providing a standardized interface for running powerful evaluations and experiments.
+A FastMCP server implementation for the Patronus SDK, providing a standardized interface for running powerful LLM system optimizations, evaluations, and experiments.
 
 ## Features
 
-- **Initialization**: Configure Patronus with project settings and API credentials
-- **Evaluation**: Run single evaluations with Patronus Evaluators like Lynx, Glider, and Judge-Image 
-- **Experiments**: Run batch experiments with multiple Patronus Evaluators and evaluation datasets
+- Initialize Patronus with API key and project settings
+- Run single evaluations with configurable evaluators
+- Run batch evaluations with multiple evaluators
+- Run experiments with datasets
+- Run asynchronous batch evaluations with multiple evaluators
 
 ## Installation
 
@@ -22,95 +24,119 @@ python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
-3. Install dependencies:
+3. Install main and dev dependencies:
 ```bash
 uv pip install -e .
+uv pip install -e ".[dev]"
 ```
+
 
 ## Usage
 
-### Starting the Server
+### Initialize
 
-```bash
-python -m src.patronus_mcp.server
-```
-
-The server will start with stdio transport, ready to accept commands.
-
-### API Endpoints
-
-#### Initialize
 ```python
-{
-    "request": {
-        "data": {
-            "project_name": "your_project",
-            "api_key": "your_api_key",
-            "app": "your_app_name"
-        }
-    }
-}
+from patronus_mcp.server import mcp, Request, InitRequest
+
+request = Request(data=InitRequest(
+    project_name="MyProject",
+    api_key="your-api-key",
+    app="my-app"
+))
+response = await mcp.call_tool("initialize", {"request": request.model_dump()})
 ```
 
-#### Evaluate
+### Single Evaluation
+
 ```python
-{
-    "request": {
-        "data": {
-            "task_input": "Your input text",
-            "task_context": ["Context 1", "Context 2"],
-            "task_output": "Your output text",
-            "evaluator": {
-                "name": "lynx",
-                "criteria": "patronus:hallucination",
-                "explain_strategy": "always"
-            }
-        }
-    }
-}
+from patronus_mcp.server import Request, EvaluationRequest, RemoteEvaluatorConfig
+
+request = Request(data=EvaluationRequest(
+    evaluator=RemoteEvaluatorConfig(
+        name="lynx",
+        criteria="patronus:hallucination",
+        explain_strategy="always"
+    ),
+    task_input="What is the capital of France?",
+    task_output="Paris is the capital of France."
+    task_context=["The capital of France is Paris."],
+))
+response = await mcp.call_tool("evaluate", {"request": request.model_dump()})
 ```
 
-#### Run Experiment
+### Batch Evaluation
+
 ```python
-{
-    "request": {
-        "data": {
-            "project_name": "your_project",
-            "experiment_name": "test_experiment",
-            "dataset": [
-                {
-                    "task_input": "Input 1",
-                    "task_context": ["Context 1"],
-                    "task_output": "Output 1"
-                }
-            ],
-            "evaluators": [
-                {
-                    "name": "patronus:hallucination",
-                    "criteria": "lynx",
-                    "explain_strategy": "always"
-                }
-            ],
-            "api_key": "your_api_key"
-        }
-    }
-}
+from patronus_mcp.server import Request, BatchEvaluationRequest, RemoteEvaluatorConfig
+
+request = Request(data=BatchEvaluationRequest(
+    evaluators=[
+        RemoteEvaluatorConfig(
+            name="lynx",
+            criteria="patronus:hallucination",
+            explain_strategy="always"
+        ),
+        RemoteEvaluatorConfig(
+            name="judge",
+            criteria="patronus:is-concise",
+            explain_strategy="always"
+        )
+    ],
+    task_input="What is the capital of France?",
+    task_output="Paris is the capital of France."
+    task_context=["The capital of France is Paris."],
+))
+response = await mcp.call_tool("batch_evaluate", {"request": request.model_dump()})
 ```
 
-### Running Tests
+### Async Batch Evaluation
 
-```bash
-pytest tests/test_server.py -v
+```python
+from patronus_mcp.server import Request, AsyncBatchEvaluationRequest, AsyncRemoteEvaluatorConfig
+
+request = Request(data=AsyncBatchEvaluationRequest(
+    evaluators=[
+        AsyncRemoteEvaluatorConfig(
+            name="lynx",
+            criteria="patronus:hallucination",
+            explain_strategy="always"
+        ),
+        AsyncRemoteEvaluatorConfig(
+            name="judge",
+            criteria="patronus:is-concise",
+            explain_strategy="always"
+        )
+    ],
+    task_input="What is the capital of France?",
+    task_output="Paris is the capital of France."
+    task_context=["The capital of France is Paris."],
+))
+response = await mcp.call_tool("async_batch_evaluate", {"request": request.model_dump()})
 ```
 
-## Configuration
+### Run Experiment
 
-The server supports the following configuration options:
+```python
+from patronus_mcp.server import Request, ExperimentRequest, RemoteEvaluatorConfig
 
-- `PATRONUS_API_KEY`: Environment variable for API key
-- `project_name`: Project identifier
-- `app`: Application name
-- `max_concurrency`: Maximum concurrent evaluations (default: 10)
+request = Request(data=ExperimentRequest(
+    project_name="MyProject",
+    experiment_name="MyExperiment",
+    dataset=[{
+        "task_input": "What is the capital of France?",
+        "task_output": "Paris is the capital of France."
+        "task_context"=["The capital of France is Paris."],
+    }],
+    evaluators=[
+        RemoteEvaluatorConfig(
+            name="lynx",
+            criteria="patronus:hallucination",
+            explain_strategy="always"
+        )
+    ]
+))
+response = await mcp.call_tool("run_experiment", {"request": request.model_dump()})
+```
 
 ## Development
 
@@ -132,6 +158,18 @@ patronus-mcp-server/
 1. Define new request models in `server.py`
 2. Implement new tool functions with the `@mcp.tool()` decorator
 3. Add corresponding tests in `test_server.py`
+
+### Running Tests
+
+```bash
+pytest tests/
+```
+
+### Running the Server
+
+```bash
+python -m src.patronus_mcp.server
+```
 
 ## License
 

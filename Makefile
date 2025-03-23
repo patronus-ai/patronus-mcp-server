@@ -4,6 +4,10 @@
 install:
 	uv pip install -e .
 
+# Install dev dependencies
+install-dev:
+	uv pip install -e .[dev]
+
 # Run tests with default output
 test:
 	pytest
