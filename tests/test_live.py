@@ -27,12 +27,11 @@ class MCPTestClient:
             raise ValueError("Server script must be a .py or .js file")
 
         # Get API key from provided argument, environment, or prompt
+        api_key = api_key or os.getenv('PATRONUS_API_KEY')
         if not api_key:
-            api_key = os.getenv('PATRONUS_API_KEY')
+            api_key = input("Please enter your Patronus API key: ").strip()
             if not api_key:
-                api_key = input("Please enter your Patronus API key: ").strip()
-                if not api_key:
-                    raise ValueError("Patronus API key is required")
+                raise ValueError("Patronus API key is required")
 
         command = "python" if is_python else "node"
         server_params = StdioServerParameters(
