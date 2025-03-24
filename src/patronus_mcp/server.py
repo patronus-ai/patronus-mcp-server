@@ -1,10 +1,10 @@
+import argparse
+import os 
+
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
 import patronus, patronus.evals, patronus.experiments.experiment 
 from typing import Optional, List, Dict, Any, Literal, Generic, TypeVar, Union
-import os
-
-mcp = FastMCP("patronus")
 
 T = TypeVar('T')
 
@@ -12,9 +12,12 @@ class Request(BaseModel, Generic[T]):
     data: T
 
 class InitRequest(BaseModel):
-    api_key: Optional[str] = None
     project_name: Optional[str] = None
     app: Optional[str] = None
+    api_url: Optional[str] = None
+    otel_endpoint: Optional[str] = None
+    api_key: Optional[str] = None
+    service: Optional[str] = None
 
 class RemoteEvaluatorConfig(BaseModel):
     name: str  
@@ -52,16 +55,6 @@ class ExperimentRequest(BaseModel):
     api_key: Optional[str] = None
 
 class BatchEvaluationRequest(BaseModel):
-    evaluators: List[RemoteEvaluatorConfig]
-    task_input: Optional[str] = None
-    task_output: Optional[str] = None
-    system_prompt: Optional[str] = None
-    task_context: Union[list[str], str, None] = None
-    task_attachments: Union[list[Any], None] = None
-    gold_answer: Optional[str] = None
-    task_metadata: Optional[Dict[str, Any]] = None
-
-class AsyncBatchEvaluationRequest(BaseModel):
     evaluators: List[AsyncRemoteEvaluatorConfig]
     task_input: Optional[str] = None
     task_output: Optional[str] = None
@@ -71,17 +64,6 @@ class AsyncBatchEvaluationRequest(BaseModel):
     gold_answer: Optional[str] = None
     task_metadata: Optional[Dict[str, Any]] = None
 
-@mcp.tool()
-async def initialize(request: Request[InitRequest]):
-    try:
-        patronus.init(
-            project_name=request.data.project_name,
-            api_key=request.data.api_key or os.getenv("PATRONUS_API_KEY"),
-            app=request.data.app,
-        )
-        return {"status": "success", "message": f"Patronus initialized with project: {request.data.project_name}"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
 
 def _create_evaluator(config: RemoteEvaluatorConfig) -> Any:
     kwargs = {}
@@ -98,8 +80,7 @@ def _create_evaluator(config: RemoteEvaluatorConfig) -> Any:
         
     return patronus.RemoteEvaluator(config.name, **kwargs)
 
-@mcp.tool()
-async def evaluate(request: Request[EvaluationRequest]):
+def evaluate(request: Request[EvaluationRequest]):
     try:
         evaluator = _create_evaluator(request.data.evaluator)
         eval_kwargs = {}
@@ -125,8 +106,7 @@ async def evaluate(request: Request[EvaluationRequest]):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@mcp.tool()
-async def run_experiment(request: Request[ExperimentRequest]):
+def run_experiment(request: Request[ExperimentRequest]):
     try:
         evaluators = [
             _create_evaluator(config)
@@ -162,58 +142,6 @@ async def run_experiment(request: Request[ExperimentRequest]):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@mcp.tool()
-async def batch_evaluate(request: Request[BatchEvaluationRequest]):
-    try:
-        if not request.data.evaluators:
-            return {"status": "error", "message": "No evaluators provided"}
-            
-        evaluators = [
-            _create_evaluator(config)
-            for config in request.data.evaluators
-        ]
-        
-        eval_kwargs = {}
-        fields = {
-            "task_input",
-            "task_output",
-            "system_prompt",
-            "task_context",
-            "task_attachments",
-            "gold_answer",
-            "task_metadata"
-        }
-        
-        eval_kwargs.update({
-            field: getattr(request.data, field)
-            for field in fields
-            if getattr(request.data, field) is not None
-        })
-        
-        with patronus.Patronus() as client:
-            results = client.evaluate(
-                evaluators=evaluators,
-                **eval_kwargs
-            )
-            print([eval for eval in results.succeeded_evaluations()])
-            # Convert results to a serializable format
-            results_dict = {
-                "all_succeeded": results.all_succeeded(),
-                "failed_evaluations": [
-                    eval.model_dump(mode="json")
-                    for eval in results.failed_evaluations()
-                ],
-                "succeeded_evaluations": [
-                    eval.model_dump(mode="json")
-                    for eval in results.succeeded_evaluations()
-                ]
-            }
-            
-            return {"status": "success", "results": results_dict}
-            
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
 def _create_async_evaluator(config: AsyncRemoteEvaluatorConfig) -> Any:
     kwargs = {}
     if config.criteria is not None:
@@ -229,8 +157,7 @@ def _create_async_evaluator(config: AsyncRemoteEvaluatorConfig) -> Any:
         
     return patronus.evals.AsyncRemoteEvaluator(config.name, **kwargs)
 
-@mcp.tool()
-async def async_batch_evaluate(request: Request[AsyncBatchEvaluationRequest]):
+async def batch_evaluate(request: Request[BatchEvaluationRequest]):
     try:
         if not request.data.evaluators:
             return {"status": "error", "message": "No evaluators provided"}
@@ -280,7 +207,44 @@ async def async_batch_evaluate(request: Request[AsyncBatchEvaluationRequest]):
             
     except Exception as e:
         return {"status": "error", "message": str(e)}
+    
+
+def app_factory(patronus_api_key: str, patronus_api_url: str) -> FastMCP:
+    patronus.init(
+        api_key=patronus_api_key,
+        api_url=patronus_api_url
+    )
+
+    mcp = FastMCP("patronus")
+    mcp.tool()(evaluate)
+    mcp.tool()(run_experiment)
+    mcp.tool()(batch_evaluate)
+
+    return mcp
+
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--api-key", 
+        type=str,
+        required=False,
+        help="The Patronus API key. Can also be set via the PATRONUS_API_KEY environment variable.",
+    )
+    parser.add_argument(
+        "--api-url",
+        type=str,
+        required=False,
+        help="The API URL of the Patronus API. Can also be set via the PATRONUS_API_URL environment variable.",
+    )
+    args = parser.parse_args()
+
+    patronus_api_key = args.api_key or os.getenv("PATRONUS_API_KEY")
+    if not patronus_api_key:
+        parser.error("Patronus API Key must be provided either via --api-key argument or via the PATRONUS_API_KEY environment variable.")
+
+    patronus_api_url = args.api_url or os.getenv("PATRONUS_API_URL") or "https://api.patronus.ai"
+
+    app = app_factory(patronus_api_key, patronus_api_url)
     print("Starting MCP server with stdio transport")
-    mcp.run(transport="stdio")
+    app.run(transport="stdio")

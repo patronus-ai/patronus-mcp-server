@@ -1,16 +1,17 @@
 import pytest
 import json
 import os
-from src.patronus_mcp.server import mcp, Request, InitRequest, EvaluationRequest, RemoteEvaluatorConfig, ExperimentRequest, BatchEvaluationRequest, AsyncBatchEvaluationRequest, AsyncRemoteEvaluatorConfig
+from src.patronus_mcp.server import (
+    Request, EvaluationRequest, RemoteEvaluatorConfig, 
+    ExperimentRequest, BatchEvaluationRequest, AsyncRemoteEvaluatorConfig, app_factory
+)
 
 @pytest.fixture
-def init_request():
-    request = Request(data=InitRequest(
-        project_name="MyTest",
-        api_key=os.environ.get("PATRONUS_API_KEY"), 
-        app="test_app"
-    ))
-    return {"request": request.model_dump()}
+def mcp():
+    return app_factory(
+        patronus_api_key=os.environ.get("PATRONUS_API_KEY"),
+        patronus_api_url=os.environ.get("PATRONUS_API_URL", "https://api.patronus.ai")
+    )
 
 @pytest.fixture
 def evaluation_request():
@@ -54,12 +55,12 @@ def batch_evaluation_request():
         task_context=["The capital of France is Paris."],
         task_output="Paris is the capital of France.",
         evaluators=[
-            RemoteEvaluatorConfig(
+            AsyncRemoteEvaluatorConfig(
                 name="lynx",
                 criteria="patronus:hallucination",
                 explain_strategy="always"
             ),
-            RemoteEvaluatorConfig(
+            AsyncRemoteEvaluatorConfig(
                 name="judge",
                 criteria="patronus:is-concise",
                 explain_strategy="always"
@@ -68,48 +69,20 @@ def batch_evaluation_request():
     ))
     return {"request": request.model_dump()}
 
-@pytest.fixture
-def async_batch_evaluation_request():
-    request = Request(data=AsyncBatchEvaluationRequest(
-        evaluators=[
-            AsyncRemoteEvaluatorConfig(
-                name="lynx",
-                criteria="patronus:hallucination",
-                explain_strategy="always"
-            ),
-            AsyncRemoteEvaluatorConfig(
-                name="judge",
-                criteria="patronus:is-concise",
-                explain_strategy="always"
-            )
-        ],
-        task_input="What is the capital of France?",
-        task_output="Paris is the capital of France.",
-        system_prompt="You are a helpful assistant.",
-        task_context=["The capital of France is Paris."],
-        task_metadata={"source": "test"}
-    ))
-    return {"request": request.model_dump()}
 
-async def test_initialize(init_request):
-    response = await mcp.call_tool("initialize", init_request)
-    response_data = json.loads(response[0].text)
-    assert response_data["status"] == "success"
-    assert "Patronus initialized with project: MyTest" in response_data["message"]
-
-async def test_evaluate(evaluation_request):
+async def test_evaluate(mcp, evaluation_request):
     response = await mcp.call_tool("evaluate", evaluation_request)
     response_data = json.loads(response[0].text)
     assert response_data["status"] == "success"
     assert "result" in response_data
 
-async def test_run_experiment(experiment_request):
+async def test_run_experiment(mcp, experiment_request):
     response = await mcp.call_tool("run_experiment", experiment_request)
     response_data = json.loads(response[0].text)
     assert response_data["status"] == "success"
     assert "results" in response_data
 
-async def test_batch_evaluate(batch_evaluation_request):
+async def test_batch_evaluate(mcp, batch_evaluation_request):
     response = await mcp.call_tool("batch_evaluate", batch_evaluation_request)
     response_data = json.loads(response[0].text)
     assert response_data["status"] == "success"
@@ -132,12 +105,12 @@ async def test_batch_evaluate(batch_evaluation_request):
         assert "evaluation_duration" in eval_result
         assert "explanation_duration" in eval_result
 
-async def test_batch_evaluate_error():
+async def test_batch_evaluate_error(mcp):
     invalid_request = Request(data=BatchEvaluationRequest(
         task_input="What is the capital of France?",
         task_output="Paris is the capital of France.",
         evaluators=[
-            RemoteEvaluatorConfig(
+            AsyncRemoteEvaluatorConfig(
                 name="invalid_evaluator",  # This should cause an error
                 criteria="invalid_criteria"
             )
@@ -149,8 +122,7 @@ async def test_batch_evaluate_error():
     assert response_data["status"] == "error"
     assert "message" in response_data
 
-
-async def test_batch_evaluate_empty():
+async def test_batch_evaluate_empty(mcp):
     empty_request = Request(data=BatchEvaluationRequest(
         task_input="What is the capital of France?",
         task_output="Paris is the capital of France.",
@@ -158,59 +130,6 @@ async def test_batch_evaluate_empty():
     ))
     
     response = await mcp.call_tool("batch_evaluate", {"request": empty_request.model_dump()})
-    response_data = json.loads(response[0].text)
-    assert response_data["status"] == "error"
-    assert "message" in response_data
-
-async def test_async_batch_evaluate(async_batch_evaluation_request):
-    response = await mcp.call_tool("async_batch_evaluate", async_batch_evaluation_request)
-    response_data = json.loads(response[0].text)
-    print(response_data)
-    assert response_data["status"] == "success"
-    assert "results" in response_data
-    results = response_data["results"]
-    
-    assert "all_succeeded" in results
-    assert "failed_evaluations" in results
-    assert "succeeded_evaluations" in results
-
-    for eval_result in results["succeeded_evaluations"] + results["failed_evaluations"]:
-        assert "score" in eval_result
-        assert "pass_" in eval_result
-        assert "text_output" in eval_result
-        assert "metadata" in eval_result
-        assert "explanation" in eval_result
-        assert "tags" in eval_result
-        assert "dataset_id" in eval_result
-        assert "dataset_sample_id" in eval_result
-        assert "evaluation_duration" in eval_result
-        assert "explanation_duration" in eval_result
-
-async def test_async_batch_evaluate_error():
-    invalid_request = Request(data=AsyncBatchEvaluationRequest(
-        task_input="What is the capital of France?",
-        task_output="Paris is the capital of France.",
-        evaluators=[
-            AsyncRemoteEvaluatorConfig(
-                name="invalid_evaluator",  # This should cause an error
-                criteria="invalid_criteria"
-            )
-        ]
-    ))
-    
-    response = await mcp.call_tool("async_batch_evaluate", {"request": invalid_request.model_dump()})
-    response_data = json.loads(response[0].text)
-    assert response_data["status"] == "error"
-    assert "message" in response_data
-
-async def test_async_batch_evaluate_empty():
-    empty_request = Request(data=AsyncBatchEvaluationRequest(
-        task_input="What is the capital of France?",
-        task_output="Paris is the capital of France.",
-        evaluators=[]
-    ))
-    
-    response = await mcp.call_tool("async_batch_evaluate", {"request": empty_request.model_dump()})
     response_data = json.loads(response[0].text)
     assert response_data["status"] == "error"
     assert "message" in response_data
