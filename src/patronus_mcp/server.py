@@ -1,10 +1,13 @@
 import argparse
 import os 
+import httpx
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
 import patronus, patronus.evals, patronus.experiments.experiment 
 from typing import Optional, List, Dict, Any, Literal, Generic, TypeVar, Union
+from patronus.api.api_client import PatronusAPIClient
+from patronus.api.api_types import ListEvaluatorsResponse, ListCriteriaResponse
 
 T = TypeVar('T')
 
@@ -64,6 +67,17 @@ class BatchEvaluationRequest(BaseModel):
     gold_answer: Optional[str] = None
     task_metadata: Optional[Dict[str, Any]] = None
 
+class ListCriteriaRequest(BaseModel):
+    """Request model for listing criteria"""
+    evaluator_family: Optional[str] = None
+    evaluator_id: Optional[str] = None
+    get_last_revision: bool = False
+    is_patronus_managed: Optional[bool] = None
+    limit: int = 1000
+    name: Optional[str] = None
+    offset: int = 0
+    public_id: Optional[str] = None
+    revision: Optional[str] = None
 
 def _create_evaluator(config: RemoteEvaluatorConfig) -> Any:
     kwargs = {}
@@ -207,7 +221,30 @@ async def batch_evaluate(request: Request[BatchEvaluationRequest]):
             
     except Exception as e:
         return {"status": "error", "message": str(e)}
-    
+
+def list_evaluators(patronus_client: PatronusAPIClient = None) -> ListEvaluatorsResponse:
+    """List all available evaluators from the Patronus API"""
+    try:
+        if not patronus_client:
+            raise ValueError("Patronus client must be provided")
+        response = patronus_client.list_evaluators_sync()
+        evaluators = [evaluator.model_dump() for evaluator in response]
+        return {"status": "success", "result": evaluators}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+def list_criteria(request: Request[ListCriteriaRequest], patronus_client: PatronusAPIClient = None) -> Dict[str, Any]:
+    """List all available criteria from the Patronus API"""
+    try:
+        if not patronus_client:
+            raise ValueError("Patronus client must be provided")
+        
+        criteria_request = request.data if request.data else ListCriteriaRequest()
+        response = patronus_client.list_criteria_sync(request=criteria_request)
+        criteria = [criterion.model_dump() for criterion in response.evaluator_criteria]
+        return {"status": "success", "result": criteria}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 def app_factory(patronus_api_key: str, patronus_api_url: str) -> FastMCP:
     patronus.init(
@@ -215,10 +252,20 @@ def app_factory(patronus_api_key: str, patronus_api_url: str) -> FastMCP:
         api_url=patronus_api_url
     )
 
+    # Initialize the client once with all required parameters
+    patronus_client = PatronusAPIClient(
+        api_key=patronus_api_key,
+        base_url=patronus_api_url,
+        client_http=httpx.Client(),
+        client_http_async=httpx.AsyncClient()
+    )
+    
     mcp = FastMCP("patronus")
     mcp.tool()(evaluate)
     mcp.tool()(run_experiment)
     mcp.tool()(batch_evaluate)
+    mcp.tool(name="list_evaluators")(lambda: list_evaluators(patronus_client=patronus_client))
+    mcp.tool(name="list_criteria")(lambda request={}: list_criteria(Request(data=ListCriteriaRequest(**request)), patronus_client=patronus_client))
 
     return mcp
 

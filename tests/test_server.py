@@ -3,7 +3,8 @@ import json
 import os
 from src.patronus_mcp.server import (
     Request, EvaluationRequest, RemoteEvaluatorConfig, 
-    ExperimentRequest, BatchEvaluationRequest, AsyncRemoteEvaluatorConfig, app_factory
+    ExperimentRequest, BatchEvaluationRequest, AsyncRemoteEvaluatorConfig, app_factory,
+    ListCriteriaRequest
 )
 
 @pytest.fixture
@@ -69,6 +70,10 @@ def batch_evaluation_request():
     ))
     return {"request": request.model_dump()}
 
+@pytest.fixture
+def list_evaluators_request():
+    request = Request(data=ListEvaluatorsRequest())
+    return {"request": request.model_dump()}
 
 async def test_evaluate(mcp, evaluation_request):
     response = await mcp.call_tool("evaluate", evaluation_request)
@@ -133,3 +138,84 @@ async def test_batch_evaluate_empty(mcp):
     response_data = json.loads(response[0].text)
     assert response_data["status"] == "error"
     assert "message" in response_data
+
+async def test_list_evaluators(mcp):
+    """Test listing evaluators"""
+    response = await mcp.call_tool("list_evaluators", {})
+    response_data = json.loads(response[0].text)
+    assert response_data["status"] == "success"
+    assert "result" in response_data
+    result = response_data["result"]
+    
+    # Verify the response structure
+    assert isinstance(result, list)
+    assert len(result) > 0
+    
+    # Verify the structure of each evaluator
+    evaluator = result[0]
+    assert isinstance(evaluator, dict)
+    assert "id" in evaluator
+    assert "name" in evaluator
+    assert "evaluator_family" in evaluator
+    assert "aliases" in evaluator
+    assert isinstance(evaluator["aliases"], list)
+    
+    # Verify specific evaluator types are present
+    evaluator_ids = [e["id"] for e in result]
+    assert any("judge" in id for id in evaluator_ids)
+    assert any("hallucination" in id for id in evaluator_ids)
+    assert any("toxicity" in id for id in evaluator_ids)
+
+async def test_list_evaluators_no_client():
+    """Test listing evaluators without client"""
+    # Create an MCP instance without a client
+    mcp_no_client = app_factory(
+        patronus_api_key=None,
+        patronus_api_url="https://api.patronus.ai"
+    )
+    
+    response = await mcp_no_client.call_tool("list_evaluators", {})
+    response_data = json.loads(response[0].text)
+    assert response_data["status"] == "error"
+
+async def test_list_criteria(mcp):
+    """Test listing evaluators"""
+    response = await mcp.call_tool("list_criteria", {})
+    response_data = json.loads(response[0].text)
+    print(response_data)
+    assert response_data["status"] == "success"
+    assert "result" in response_data
+    result = response_data["result"]
+    
+    # Verify the response structure
+    assert isinstance(result, list)
+    assert len(result) > 0
+    
+    # Verify the structure of each evaluator
+    criterion = result[0]
+    assert "public_id" in criterion
+    assert "evaluator_family" in criterion
+    assert "name" in criterion
+    assert "revision" in criterion
+    assert "config" in criterion
+    assert "is_patronus_managed" in criterion
+    assert "created_at" in criterion
+    assert "description" in criterion
+    assert isinstance(criterion["config"], dict)
+    
+    # Verify specific criterion types are present
+    criteria_names = [e["name"] for e in result]
+    assert any("patronus:hallucination" in id for id in criteria_names)
+    assert any("patronus:is-concise" in id for id in criteria_names)
+    assert any("patronus:caption-describes-non-primary-objects" in id for id in criteria_names)
+
+async def test_list_criteria_no_client():
+    """Test list_criteria when no client is provided"""
+    # Create an MCP instance without a client
+    mcp_no_client = app_factory(
+        patronus_api_key=None,
+        patronus_api_url="https://api.patronus.ai"
+    )
+    response = await mcp_no_client.call_tool("list_criteria", {})
+    response_data = json.loads(response[0].text)
+    assert response_data["status"] == "error"

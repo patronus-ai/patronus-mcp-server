@@ -1,6 +1,6 @@
 # Patronus MCP Server
 
-A FastMCP server implementation for the Patronus SDK, providing a standardized interface for running powerful LLM system optimizations, evaluations, and experiments.
+An MCP server implementation for the Patronus SDK, providing a standardized interface for running powerful LLM system optimizations, evaluations, and experiments.
 
 ## Features
 
