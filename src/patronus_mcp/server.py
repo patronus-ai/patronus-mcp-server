@@ -55,16 +55,6 @@ class ExperimentRequest(BaseModel):
     api_key: Optional[str] = None
 
 class BatchEvaluationRequest(BaseModel):
-    evaluators: List[RemoteEvaluatorConfig]
-    task_input: Optional[str] = None
-    task_output: Optional[str] = None
-    system_prompt: Optional[str] = None
-    task_context: Union[list[str], str, None] = None
-    task_attachments: Union[list[Any], None] = None
-    gold_answer: Optional[str] = None
-    task_metadata: Optional[Dict[str, Any]] = None
-
-class AsyncBatchEvaluationRequest(BaseModel):
     evaluators: List[AsyncRemoteEvaluatorConfig]
     task_input: Optional[str] = None
     task_output: Optional[str] = None
@@ -152,57 +142,6 @@ def run_experiment(request: Request[ExperimentRequest]):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-def batch_evaluate(request: Request[BatchEvaluationRequest]):
-    try:
-        if not request.data.evaluators:
-            return {"status": "error", "message": "No evaluators provided"}
-            
-        evaluators = [
-            _create_evaluator(config)
-            for config in request.data.evaluators
-        ]
-        
-        eval_kwargs = {}
-        fields = {
-            "task_input",
-            "task_output",
-            "system_prompt",
-            "task_context",
-            "task_attachments",
-            "gold_answer",
-            "task_metadata"
-        }
-        
-        eval_kwargs.update({
-            field: getattr(request.data, field)
-            for field in fields
-            if getattr(request.data, field) is not None
-        })
-        
-        with patronus.Patronus() as client:
-            results = client.evaluate(
-                evaluators=evaluators,
-                **eval_kwargs
-            )
-            print([eval for eval in results.succeeded_evaluations()])
-            # Convert results to a serializable format
-            results_dict = {
-                "all_succeeded": results.all_succeeded(),
-                "failed_evaluations": [
-                    eval.model_dump(mode="json")
-                    for eval in results.failed_evaluations()
-                ],
-                "succeeded_evaluations": [
-                    eval.model_dump(mode="json")
-                    for eval in results.succeeded_evaluations()
-                ]
-            }
-            
-            return {"status": "success", "results": results_dict}
-            
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
 def _create_async_evaluator(config: AsyncRemoteEvaluatorConfig) -> Any:
     kwargs = {}
     if config.criteria is not None:
@@ -218,7 +157,7 @@ def _create_async_evaluator(config: AsyncRemoteEvaluatorConfig) -> Any:
         
     return patronus.evals.AsyncRemoteEvaluator(config.name, **kwargs)
 
-async def async_batch_evaluate(request: Request[AsyncBatchEvaluationRequest]):
+async def batch_evaluate(request: Request[BatchEvaluationRequest]):
     try:
         if not request.data.evaluators:
             return {"status": "error", "message": "No evaluators provided"}
@@ -280,7 +219,6 @@ def app_factory(patronus_api_key: str, patronus_api_url: str) -> FastMCP:
     mcp.tool()(evaluate)
     mcp.tool()(run_experiment)
     mcp.tool()(batch_evaluate)
-    mcp.tool()(async_batch_evaluate)
 
     return mcp
 

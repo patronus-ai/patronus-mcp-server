@@ -8,7 +8,6 @@ A FastMCP server implementation for the Patronus SDK, providing a standardized i
 - Run single evaluations with configurable evaluators
 - Run batch evaluations with multiple evaluators
 - Run experiments with datasets
-- Run asynchronous batch evaluations with multiple evaluators
 
 ## Installation
 
@@ -70,7 +69,6 @@ python -m tests.test_live src/patronus_mcp/server.py
 The test script provides three test options:
 1. Single evaluation test
 2. Batch evaluation test
-3. Async batch evaluation test
 
 Each test will display the results in a nicely formatted JSON output.
 
@@ -114,12 +112,12 @@ from patronus_mcp.server import Request, BatchEvaluationRequest, RemoteEvaluator
 
 request = Request(data=BatchEvaluationRequest(
     evaluators=[
-        RemoteEvaluatorConfig(
+        AsyncRemoteEvaluatorConfig(
             name="lynx",
             criteria="patronus:hallucination",
             explain_strategy="always"
         ),
-        RemoteEvaluatorConfig(
+        AsyncRemoteEvaluatorConfig(
             name="judge",
             criteria="patronus:is-concise",
             explain_strategy="always"
@@ -130,31 +128,6 @@ request = Request(data=BatchEvaluationRequest(
     task_context=["The capital of France is Paris."],
 ))
 response = await mcp.call_tool("batch_evaluate", {"request": request.model_dump()})
-```
-
-#### Async Batch Evaluation
-
-```python
-from patronus_mcp.server import Request, AsyncBatchEvaluationRequest, AsyncRemoteEvaluatorConfig
-
-request = Request(data=AsyncBatchEvaluationRequest(
-    evaluators=[
-        AsyncRemoteEvaluatorConfig(
-            name="lynx",
-            criteria="patronus:hallucination",
-            explain_strategy="always"
-        ),
-        AsyncRemoteEvaluatorConfig(
-            name="judge",
-            criteria="patronus:is-concise",
-            explain_strategy="always"
-        )
-    ],
-    task_input="What is the capital of France?",
-    task_output="Paris is the capital of France."
-    task_context=["The capital of France is Paris."],
-))
-response = await mcp.call_tool("async_batch_evaluate", {"request": request.model_dump()})
 ```
 
 #### Run Experiment

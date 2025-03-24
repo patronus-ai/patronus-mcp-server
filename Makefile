@@ -10,7 +10,7 @@ install-dev:
 
 # Run tests with default output
 test:
-	pytest
+	pytest tests/
 
 # Run tests with verbose output
 test-verbose:
@@ -30,11 +30,12 @@ test-server:
 
 # Run the server (uses PATRONUS_API_KEY from env if not provided)
 run-server:
-	@if [ -n "$(API_KEY)" ]; then \
-		python -m src.patronus_mcp.server --api-key $(API_KEY); \
-	else \
-		python -m src.patronus_mcp.server; \
+	@if [ -z "$$PATRONUS_API_KEY" ]; then \
+		echo "Error: PATRONUS_API_KEY environment variable is not set"; \
+		echo "Please set it with: export PATRONUS_API_KEY=your_key_here"; \
+		exit 1; \
 	fi
+	python -m src.patronus_mcp.server
 
 # Run the server with custom URL (uses PATRONUS_API_KEY and PATRONUS_API_URL from env if not provided)
 run-server-custom:
@@ -50,7 +51,12 @@ run-server-custom:
 
 # Run live test script
 test-live:
-	python -m tests.test_live
+	@if [ -z "$$PATRONUS_API_KEY" ]; then \
+		echo "Error: PATRONUS_API_KEY environment variable is not set"; \
+		echo "Please set it with: export PATRONUS_API_KEY=your_key_here"; \
+		exit 1; \
+	fi
+	python -m tests.test_live src/patronus_mcp/server.py
 
 # Clean up Python cache files
 clean:
