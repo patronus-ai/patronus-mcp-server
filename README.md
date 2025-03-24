@@ -154,6 +154,32 @@ request = Request(data=ExperimentRequest(
 response = await mcp.call_tool("run_experiment", {"request": request.model_dump()})
 ```
 
+#### List Evaluator Info
+
+Get a comprehensive view of all available evaluators and their associated criteria:
+
+```python
+# No request body needed
+response = await mcp.call_tool("list_evaluator_info", {})
+
+# Response structure:
+{
+    "status": "success",
+    "result": {
+        "evaluator_family_name": {
+            "evaluator": {
+                # evaluator configuration and metadata
+            },
+            "criteria": [
+                # list of available criteria for this evaluator
+            ]
+        }
+    }
+}
+```
+
+This endpoint combines information about evaluators and their associated criteria into a single, organized response. The results are grouped by evaluator family, with each family containing its evaluator configuration and a list of available criteria.
+
 ## Development
 
 ### Project Structure
