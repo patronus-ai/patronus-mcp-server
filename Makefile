@@ -1,4 +1,4 @@
-.PHONY: test test-verbose test-cov clean install
+.PHONY: test test-verbose test-cov clean install run-server run-server-custom test-live
 
 # Install dependencies
 install:
@@ -6,7 +6,7 @@ install:
 
 # Install dev dependencies
 install-dev:
-	uv pip install -e .[dev]
+	uv pip install -e ".[dev]"
 
 # Run tests with default output
 test:
@@ -27,6 +27,30 @@ test-print:
 # Run a specific test file
 test-server:
 	pytest tests/test_server.py -v
+
+# Run the server (uses PATRONUS_API_KEY from env if not provided)
+run-server:
+	@if [ -n "$(API_KEY)" ]; then \
+		python -m src.patronus_mcp.server --api-key $(API_KEY); \
+	else \
+		python -m src.patronus_mcp.server; \
+	fi
+
+# Run the server with custom URL (uses PATRONUS_API_KEY and PATRONUS_API_URL from env if not provided)
+run-server-custom:
+	@if [ -n "$(API_KEY)" ] && [ -n "$(API_URL)" ]; then \
+		python -m src.patronus_mcp.server --api-key $(API_KEY) --api-url $(API_URL); \
+	elif [ -n "$(API_KEY)" ]; then \
+		python -m src.patronus_mcp.server --api-key $(API_KEY); \
+	elif [ -n "$(API_URL)" ]; then \
+		python -m src.patronus_mcp.server --api-url $(API_URL); \
+	else \
+		python -m src.patronus_mcp.server; \
+	fi
+
+# Run live test script
+test-live:
+	python -m tests.test_live
 
 # Clean up Python cache files
 clean:

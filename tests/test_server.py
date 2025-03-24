@@ -1,16 +1,18 @@
 import pytest
 import json
 import os
-from src.patronus_mcp.server import mcp, Request, InitRequest, EvaluationRequest, RemoteEvaluatorConfig, ExperimentRequest, BatchEvaluationRequest, AsyncBatchEvaluationRequest, AsyncRemoteEvaluatorConfig
+from src.patronus_mcp.server import (
+    Request, EvaluationRequest, RemoteEvaluatorConfig, 
+    ExperimentRequest, BatchEvaluationRequest, AsyncBatchEvaluationRequest, 
+    AsyncRemoteEvaluatorConfig, app_factory
+)
 
 @pytest.fixture
-def init_request():
-    request = Request(data=InitRequest(
-        project_name="MyTest",
-        api_key=os.environ.get("PATRONUS_API_KEY"), 
-        app="test_app"
-    ))
-    return {"request": request.model_dump()}
+def mcp():
+    return app_factory(
+        patronus_api_key=os.environ.get("PATRONUS_API_KEY"),
+        patronus_api_url=os.environ.get("PATRONUS_API_URL", "https://api.patronus.ai")
+    )
 
 @pytest.fixture
 def evaluation_request():
@@ -91,25 +93,19 @@ def async_batch_evaluation_request():
     ))
     return {"request": request.model_dump()}
 
-async def test_initialize(init_request):
-    response = await mcp.call_tool("initialize", init_request)
-    response_data = json.loads(response[0].text)
-    assert response_data["status"] == "success"
-    assert "Patronus initialized with project: MyTest" in response_data["message"]
-
-async def test_evaluate(evaluation_request):
+async def test_evaluate(mcp, evaluation_request):
     response = await mcp.call_tool("evaluate", evaluation_request)
     response_data = json.loads(response[0].text)
     assert response_data["status"] == "success"
     assert "result" in response_data
 
-async def test_run_experiment(experiment_request):
+async def test_run_experiment(mcp, experiment_request):
     response = await mcp.call_tool("run_experiment", experiment_request)
     response_data = json.loads(response[0].text)
     assert response_data["status"] == "success"
     assert "results" in response_data
 
-async def test_batch_evaluate(batch_evaluation_request):
+async def test_batch_evaluate(mcp, batch_evaluation_request):
     response = await mcp.call_tool("batch_evaluate", batch_evaluation_request)
     response_data = json.loads(response[0].text)
     assert response_data["status"] == "success"
@@ -132,7 +128,7 @@ async def test_batch_evaluate(batch_evaluation_request):
         assert "evaluation_duration" in eval_result
         assert "explanation_duration" in eval_result
 
-async def test_batch_evaluate_error():
+async def test_batch_evaluate_error(mcp):
     invalid_request = Request(data=BatchEvaluationRequest(
         task_input="What is the capital of France?",
         task_output="Paris is the capital of France.",
@@ -149,8 +145,7 @@ async def test_batch_evaluate_error():
     assert response_data["status"] == "error"
     assert "message" in response_data
 
-
-async def test_batch_evaluate_empty():
+async def test_batch_evaluate_empty(mcp):
     empty_request = Request(data=BatchEvaluationRequest(
         task_input="What is the capital of France?",
         task_output="Paris is the capital of France.",
@@ -162,7 +157,7 @@ async def test_batch_evaluate_empty():
     assert response_data["status"] == "error"
     assert "message" in response_data
 
-async def test_async_batch_evaluate(async_batch_evaluation_request):
+async def test_async_batch_evaluate(mcp, async_batch_evaluation_request):
     response = await mcp.call_tool("async_batch_evaluate", async_batch_evaluation_request)
     response_data = json.loads(response[0].text)
     print(response_data)
@@ -186,7 +181,7 @@ async def test_async_batch_evaluate(async_batch_evaluation_request):
         assert "evaluation_duration" in eval_result
         assert "explanation_duration" in eval_result
 
-async def test_async_batch_evaluate_error():
+async def test_async_batch_evaluate_error(mcp):
     invalid_request = Request(data=AsyncBatchEvaluationRequest(
         task_input="What is the capital of France?",
         task_output="Paris is the capital of France.",
@@ -203,7 +198,7 @@ async def test_async_batch_evaluate_error():
     assert response_data["status"] == "error"
     assert "message" in response_data
 
-async def test_async_batch_evaluate_empty():
+async def test_async_batch_evaluate_empty(mcp):
     empty_request = Request(data=AsyncBatchEvaluationRequest(
         task_input="What is the capital of France?",
         task_output="Paris is the capital of France.",
