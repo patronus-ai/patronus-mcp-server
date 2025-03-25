@@ -4,7 +4,7 @@ import os
 from src.patronus_mcp.server import (
     Request, EvaluationRequest, RemoteEvaluatorConfig, 
     ExperimentRequest, BatchEvaluationRequest, AsyncRemoteEvaluatorConfig, app_factory,
-    ListCriteriaRequest
+    CreateCriteriaRequest
 )
 
 @pytest.fixture
@@ -71,9 +71,20 @@ def batch_evaluation_request():
     return {"request": request.model_dump()}
 
 @pytest.fixture
-def list_evaluators_request():
-    request = Request(data=ListEvaluatorsRequest())
+def create_criteria_request():
+    """Fixture for create criteria request"""
+    request = Request(data=CreateCriteriaRequest(
+        name="answer-incompleteness-test-1",
+        evaluator_family="Judge",
+        config={
+            "pass_criteria": "The MODEL_OUTPUT should contain all the details needed from RETRIEVED CONTEXT to answer USER INPUT.",
+            "active_learning_enabled": False,
+            "active_learning_negative_samples": None,
+            "active_learning_positive_samples": None
+        }
+    ))
     return {"request": request.model_dump()}
+
 
 async def test_evaluate(mcp, evaluation_request):
     response = await mcp.call_tool("evaluate", evaluation_request)
@@ -181,5 +192,26 @@ async def test_list_evaluator_info_no_client():
         patronus_api_url="https://api.patronus.ai"
     )
     response = await mcp_no_client.call_tool("list_evaluator_info", {})
+    response_data = json.loads(response[0].text)
+    assert response_data["status"] == "error"
+
+async def test_create_criteria(mcp, create_criteria_request):
+    """Test creating a new criteria"""
+    print("create_criteria_request", create_criteria_request)
+    response = await mcp.call_tool("create_criteria", create_criteria_request)
+    response_data = json.loads(response[0].text)
+    print("response_data", response_data)
+
+    assert response_data["status"] == "success"
+    assert "result" in response_data
+
+async def test_create_criteria_no_client(create_criteria_request):
+    """Test create_criteria when no client is provided"""
+    mcp_no_client = app_factory(
+        patronus_api_key=None,
+        patronus_api_url="https://api.patronus.ai"
+    )
+    
+    response = await mcp_no_client.call_tool("create_criteria", create_criteria_request)
     response_data = json.loads(response[0].text)
     assert response_data["status"] == "error"

@@ -79,6 +79,11 @@ class ListCriteriaRequest(BaseModel):
     public_id: Optional[str] = None
     revision: Optional[str] = None
 
+class CreateCriteriaRequest(BaseModel):
+    name: str
+    evaluator_family: str
+    config: Dict[str, Any]
+
 def _create_evaluator(config: RemoteEvaluatorConfig) -> Any:
     kwargs = {}
     if config.criteria is not None:
@@ -239,6 +244,34 @@ def _list_criteria(request: Request[ListCriteriaRequest], patronus_client: Patro
     response = patronus_client.list_criteria_sync(request=criteria_request)
     return [criterion.model_dump() for criterion in response.evaluator_criteria]
 
+def create_criteria(request: Request[CreateCriteriaRequest], patronus_client: PatronusAPIClient = None) -> Dict[str, Any]:
+    """
+    Create a new criteria using the Patronus API.
+    Args:
+        request: Dictionary containing the request data with structure:
+            {
+                "request": {
+                    "data": {
+                        "name": str,
+                        "evaluator_family": str,
+                        "config": Dict[str, Any]
+                    }
+                }
+            }
+        patronus_client: Patronus API client instance
+    Returns:
+        Dictionary containing the created criteria information
+    """
+    try:
+        if not patronus_client:
+            raise ValueError("Patronus client must be provided")
+        request_obj = CreateCriteriaRequest(**request["data"])
+        response = patronus_client.create_criteria_sync(request_obj)
+        
+        return { "status": "success", "result": response.evaluator_criteria.model_dump() }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 def list_evaluator_info(patronus_client: PatronusAPIClient = None) -> Dict[str, List[Dict[str, Any]]]:
     """
     Get combined information about evaluators and their criteria.
@@ -296,6 +329,7 @@ def app_factory(patronus_api_key: str, patronus_api_url: str) -> FastMCP:
     mcp.tool()(run_experiment)
     mcp.tool()(batch_evaluate)
     mcp.tool(name="list_evaluator_info")(lambda: list_evaluator_info(patronus_client=patronus_client))
+    mcp.tool(name="create_criteria")(lambda request: create_criteria(request, patronus_client=patronus_client))
 
     return mcp
 
