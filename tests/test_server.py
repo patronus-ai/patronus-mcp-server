@@ -122,135 +122,135 @@ def has_score(output: str, context: List[str]) -> EvaluationResult:
         tags={"quality": "high_score"}
     )
 
-# async def test_evaluate(mcp, evaluation_request):
-#     response = await mcp.call_tool("evaluate", evaluation_request)
-#     response_data = json.loads(response[0].text)
-#     assert response_data["status"] == "success"
-#     assert "result" in response_data
+async def test_evaluate(mcp, evaluation_request):
+    response = await mcp.call_tool("evaluate", evaluation_request)
+    response_data = json.loads(response[0].text)
+    assert response_data["status"] == "success"
+    assert "result" in response_data
 
-# async def test_run_experiment(mcp, experiment_request):
-#     response = await mcp.call_tool("run_experiment", experiment_request)
-#     response_data = json.loads(response[0].text)
-#     assert response_data["status"] == "success"
-#     assert "results" in response_data
+async def test_run_experiment(mcp, experiment_request):
+    response = await mcp.call_tool("run_experiment", experiment_request)
+    response_data = json.loads(response[0].text)
+    assert response_data["status"] == "success"
+    assert "results" in response_data
 
-# async def test_batch_evaluate(mcp, batch_evaluation_request):
-#     response = await mcp.call_tool("batch_evaluate", batch_evaluation_request)
-#     response_data = json.loads(response[0].text)
-#     assert response_data["status"] == "success"
-#     assert "results" in response_data
-#     results = response_data["results"]
+async def test_batch_evaluate(mcp, batch_evaluation_request):
+    response = await mcp.call_tool("batch_evaluate", batch_evaluation_request)
+    response_data = json.loads(response[0].text)
+    assert response_data["status"] == "success"
+    assert "results" in response_data
+    results = response_data["results"]
     
-#     assert "all_succeeded" in results
-#     assert "failed_evaluations" in results
-#     assert "succeeded_evaluations" in results
+    assert "all_succeeded" in results
+    assert "failed_evaluations" in results
+    assert "succeeded_evaluations" in results
 
-#     for eval_result in results["succeeded_evaluations"] + results["failed_evaluations"]:
-#         assert "score" in eval_result
-#         assert "pass_" in eval_result
-#         assert "text_output" in eval_result
-#         assert "metadata" in eval_result
-#         assert "explanation" in eval_result
-#         assert "tags" in eval_result
-#         assert "dataset_id" in eval_result
-#         assert "dataset_sample_id" in eval_result
-#         assert "evaluation_duration" in eval_result
-#         assert "explanation_duration" in eval_result
+    for eval_result in results["succeeded_evaluations"] + results["failed_evaluations"]:
+        assert "score" in eval_result
+        assert "pass_" in eval_result
+        assert "text_output" in eval_result
+        assert "metadata" in eval_result
+        assert "explanation" in eval_result
+        assert "tags" in eval_result
+        assert "dataset_id" in eval_result
+        assert "dataset_sample_id" in eval_result
+        assert "evaluation_duration" in eval_result
+        assert "explanation_duration" in eval_result
 
-# async def test_batch_evaluate_error(mcp):
-#     invalid_request = Request(data=BatchEvaluationRequest(
-#         task_input="What is the capital of France?",
-#         task_output="Paris is the capital of France.",
-#         evaluators=[
-#             AsyncRemoteEvaluatorConfig(
-#                 name="invalid_evaluator",  # This should cause an error
-#                 criteria="invalid_criteria"
-#             )
-#         ]
-#     ))
+async def test_batch_evaluate_error(mcp):
+    invalid_request = Request(data=BatchEvaluationRequest(
+        task_input="What is the capital of France?",
+        task_output="Paris is the capital of France.",
+        evaluators=[
+            AsyncRemoteEvaluatorConfig(
+                name="invalid_evaluator",  # This should cause an error
+                criteria="invalid_criteria"
+            )
+        ]
+    ))
     
-#     response = await mcp.call_tool("batch_evaluate", {"request": invalid_request.model_dump()})
-#     response_data = json.loads(response[0].text)
-#     assert response_data["status"] == "error"
-#     assert "message" in response_data
+    response = await mcp.call_tool("batch_evaluate", {"request": invalid_request.model_dump()})
+    response_data = json.loads(response[0].text)
+    assert response_data["status"] == "error"
+    assert "message" in response_data
 
-# async def test_batch_evaluate_empty(mcp):
-#     empty_request = Request(data=BatchEvaluationRequest(
-#         task_input="What is the capital of France?",
-#         task_output="Paris is the capital of France.",
-#         evaluators=[]  
-#     ))
+async def test_batch_evaluate_empty(mcp):
+    empty_request = Request(data=BatchEvaluationRequest(
+        task_input="What is the capital of France?",
+        task_output="Paris is the capital of France.",
+        evaluators=[]  
+    ))
     
-#     response = await mcp.call_tool("batch_evaluate", {"request": empty_request.model_dump()})
-#     response_data = json.loads(response[0].text)
-#     assert response_data["status"] == "error"
-#     assert "message" in response_data
+    response = await mcp.call_tool("batch_evaluate", {"request": empty_request.model_dump()})
+    response_data = json.loads(response[0].text)
+    assert response_data["status"] == "error"
+    assert "message" in response_data
 
-# async def test_list_evaluator_info(mcp):
-#     """Test list_evaluator_info returns combined evaluator and criteria information"""
-#     # Call the tool
-#     response = await mcp.call_tool("list_evaluator_info", {})
-#     response_data = json.loads(response[0].text)
-#     print("response_data", response_data)
-#     # Check basic response structure
-#     assert response_data["status"] == "success"
-#     assert isinstance(response_data["result"], dict)
+async def test_list_evaluator_info(mcp):
+    """Test list_evaluator_info returns combined evaluator and criteria information"""
+    # Call the tool
+    response = await mcp.call_tool("list_evaluator_info", {})
+    response_data = json.loads(response[0].text)
+    print("response_data", response_data)
+    # Check basic response structure
+    assert response_data["status"] == "success"
+    assert isinstance(response_data["result"], dict)
     
-#     # Check that at least one evaluator family exists
-#     assert len(response_data["result"]) > 0
+    # Check that at least one evaluator family exists
+    assert len(response_data["result"]) > 0
     
-#     # Check structure for first evaluator family
-#     first_family = next(iter(response_data["result"]))
-#     family_data = response_data["result"][first_family]
+    # Check structure for first evaluator family
+    first_family = next(iter(response_data["result"]))
+    family_data = response_data["result"][first_family]
     
-#     # Verify the structure of the response
-#     assert "evaluator" in family_data
-#     assert "criteria" in family_data
-#     assert isinstance(family_data["criteria"], list)
+    # Verify the structure of the response
+    assert "evaluator" in family_data
+    assert "criteria" in family_data
+    assert isinstance(family_data["criteria"], list)
     
-#     # Verify evaluator does not contain removed fields
-#     evaluator = family_data["evaluator"]
-#     assert "evaluator_family" not in evaluator
-#     assert "revision" not in evaluator
-#     assert "name" not in evaluator
+    # Verify evaluator does not contain removed fields
+    evaluator = family_data["evaluator"]
+    assert "evaluator_family" not in evaluator
+    assert "revision" not in evaluator
+    assert "name" not in evaluator
     
-#     # If criteria exist, verify they don't contain removed fields
-#     if family_data["criteria"]:
-#         criterion = family_data["criteria"][0]
-#         assert "evaluator_family" not in criterion
-#         assert "revision" not in criterion
+    # If criteria exist, verify they don't contain removed fields
+    if family_data["criteria"]:
+        criterion = family_data["criteria"][0]
+        assert "evaluator_family" not in criterion
+        assert "revision" not in criterion
 
-# async def test_list_evaluator_info_no_client():
-#     """Test list_evaluator_info when no client is provided"""
-#     # Create MCP instance without client
-#     mcp_no_client = app_factory(
-#         patronus_api_key=None,
-#         patronus_api_url="https://api.patronus.ai"
-#     )
-#     response = await mcp_no_client.call_tool("list_evaluator_info", {})
-#     response_data = json.loads(response[0].text)
-#     assert response_data["status"] == "error"
+async def test_list_evaluator_info_no_client():
+    """Test list_evaluator_info when no client is provided"""
+    # Create MCP instance without client
+    mcp_no_client = app_factory(
+        patronus_api_key=None,
+        patronus_api_url="https://api.patronus.ai"
+    )
+    response = await mcp_no_client.call_tool("list_evaluator_info", {})
+    response_data = json.loads(response[0].text)
+    assert response_data["status"] == "error"
 
-# async def test_create_criteria(mcp, create_criteria_request):
-#     """Test creating a new criteria"""
-#     print("create_criteria_request", create_criteria_request)
-#     response = await mcp.call_tool("create_criteria", create_criteria_request)
-#     response_data = json.loads(response[0].text)
-#     print("response_data", response_data)
+async def test_create_criteria(mcp, create_criteria_request):
+    """Test creating a new criteria"""
+    print("create_criteria_request", create_criteria_request)
+    response = await mcp.call_tool("create_criteria", create_criteria_request)
+    response_data = json.loads(response[0].text)
+    print("response_data", response_data)
 
-#     assert response_data["status"] == "success"
-#     assert "result" in response_data
+    assert response_data["status"] == "success"
+    assert "result" in response_data
 
-# async def test_create_criteria_no_client(create_criteria_request):
-#     """Test create_criteria when no client is provided"""
-#     mcp_no_client = app_factory(
-#         patronus_api_key=None,
-#         patronus_api_url="https://api.patronus.ai"
-#     )
+async def test_create_criteria_no_client(create_criteria_request):
+    """Test create_criteria when no client is provided"""
+    mcp_no_client = app_factory(
+        patronus_api_key=None,
+        patronus_api_url="https://api.patronus.ai"
+    )
     
-#     response = await mcp_no_client.call_tool("create_criteria", create_criteria_request)
-#     response_data = json.loads(response[0].text)
-#     assert response_data["status"] == "error"
+    response = await mcp_no_client.call_tool("create_criteria", create_criteria_request)
+    response_data = json.loads(response[0].text)
+    assert response_data["status"] == "error"
 
 async def test_custom_evaluate(mcp, custom_evaluation_request):
     """Test custom evaluation with a simple boolean evaluator"""
