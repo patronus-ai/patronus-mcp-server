@@ -3,7 +3,8 @@ import json
 import os
 from src.patronus_mcp.server import (
     Request, EvaluationRequest, RemoteEvaluatorConfig, 
-    ExperimentRequest, BatchEvaluationRequest, AsyncRemoteEvaluatorConfig, app_factory
+    ExperimentRequest, BatchEvaluationRequest, AsyncRemoteEvaluatorConfig, app_factory,
+    ListCriteriaRequest
 )
 
 @pytest.fixture
@@ -69,6 +70,10 @@ def batch_evaluation_request():
     ))
     return {"request": request.model_dump()}
 
+@pytest.fixture
+def list_evaluators_request():
+    request = Request(data=ListEvaluatorsRequest())
+    return {"request": request.model_dump()}
 
 async def test_evaluate(mcp, evaluation_request):
     response = await mcp.call_tool("evaluate", evaluation_request)
@@ -133,3 +138,48 @@ async def test_batch_evaluate_empty(mcp):
     response_data = json.loads(response[0].text)
     assert response_data["status"] == "error"
     assert "message" in response_data
+
+async def test_list_evaluator_info(mcp):
+    """Test list_evaluator_info returns combined evaluator and criteria information"""
+    # Call the tool
+    response = await mcp.call_tool("list_evaluator_info", {})
+    response_data = json.loads(response[0].text)
+    print("response_data", response_data)
+    # Check basic response structure
+    assert response_data["status"] == "success"
+    assert isinstance(response_data["result"], dict)
+    
+    # Check that at least one evaluator family exists
+    assert len(response_data["result"]) > 0
+    
+    # Check structure for first evaluator family
+    first_family = next(iter(response_data["result"]))
+    family_data = response_data["result"][first_family]
+    
+    # Verify the structure of the response
+    assert "evaluator" in family_data
+    assert "criteria" in family_data
+    assert isinstance(family_data["criteria"], list)
+    
+    # Verify evaluator does not contain removed fields
+    evaluator = family_data["evaluator"]
+    assert "evaluator_family" not in evaluator
+    assert "revision" not in evaluator
+    assert "name" not in evaluator
+    
+    # If criteria exist, verify they don't contain removed fields
+    if family_data["criteria"]:
+        criterion = family_data["criteria"][0]
+        assert "evaluator_family" not in criterion
+        assert "revision" not in criterion
+
+async def test_list_evaluator_info_no_client():
+    """Test list_evaluator_info when no client is provided"""
+    # Create MCP instance without client
+    mcp_no_client = app_factory(
+        patronus_api_key=None,
+        patronus_api_url="https://api.patronus.ai"
+    )
+    response = await mcp_no_client.call_tool("list_evaluator_info", {})
+    response_data = json.loads(response[0].text)
+    assert response_data["status"] == "error"
