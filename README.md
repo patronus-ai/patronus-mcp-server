@@ -180,6 +180,53 @@ response = await mcp.call_tool("list_evaluator_info", {})
 
 This endpoint combines information about evaluators and their associated criteria into a single, organized response. The results are grouped by evaluator family, with each family containing its evaluator configuration and a list of available criteria.
 
+#### Create Criteria
+
+Creates a new evaluator criteria in the Patronus API.
+
+```python
+{
+    "request": {
+        "data": {
+            "name": "my-criteria",
+            "evaluator_family": "Judge",
+            "config": {
+                "pass_criteria": "The MODEL_OUTPUT should contain all the details needed from RETRIEVED CONTEXT to answer USER INPUT.",
+                "active_learning_enabled": false,
+                "active_learning_negative_samples": null,
+                "active_learning_positive_samples": null
+            }
+        }
+    }
+}
+```
+
+Parameters:
+- `name` (str): Unique name for the criteria
+- `evaluator_family` (str): Family of the evaluator (e.g., "Judge", "Answer Relevance")
+- `config` (dict): Configuration for the criteria
+  - `pass_criteria` (str): The criteria that must be met for a pass
+  - `active_learning_enabled` (bool, optional): Whether active learning is enabled
+  - `active_learning_negative_samples` (int, optional): Number of negative samples for active learning
+  - `active_learning_positive_samples` (int, optional): Number of positive samples for active learning
+
+Returns:
+```python
+{
+    "status": "success",
+    "result": {
+        "name": "my-criteria",
+        "evaluator_family": "Judge",
+        "config": {
+            "pass_criteria": "The MODEL_OUTPUT should contain all the details needed from RETRIEVED CONTEXT to answer USER INPUT.",
+            "active_learning_enabled": False,
+            "active_learning_negative_samples": null,
+            "active_learning_positive_samples": null
+        }
+    }
+}
+```
+
 ## Development
 
 ### Project Structure

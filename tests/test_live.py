@@ -10,7 +10,8 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from src.patronus_mcp.server import (
     Request, EvaluationRequest, RemoteEvaluatorConfig,
-    BatchEvaluationRequest, AsyncRemoteEvaluatorConfig
+    BatchEvaluationRequest, AsyncRemoteEvaluatorConfig,
+    CreateCriteriaRequest
 )
 
 class MCPTestClient:
@@ -99,6 +100,22 @@ class MCPTestClient:
         result = await self.session.call_tool("list_evaluator_info", {})
         await self._handle_response(result, "List evaluator info")
 
+    async def test_create_criteria(self):
+        """Test creating a new criteria"""
+        request = Request(data=CreateCriteriaRequest(
+            name="answer-incompleteness-test-2",
+            evaluator_family="Judge",
+            config={
+                "pass_criteria": "The MODEL_OUTPUT should contain all the details needed from RETRIEVED CONTEXT to answer USER INPUT.",
+                "active_learning_enabled": False,
+                "active_learning_negative_samples": None,
+                "active_learning_positive_samples": None
+            }
+        ))
+        create_criteria_request = {"request": request.model_dump()}
+        result = await self.session.call_tool("create_criteria", create_criteria_request)
+        await self._handle_response(result, "Create criteria test")
+
     async def cleanup(self):
         """Clean up resources"""
         await self.exit_stack.aclose()
@@ -116,14 +133,15 @@ async def main():
         tests: Dict[str, Callable] = {
             "1": client.test_evaluate,
             "2": client.test_batch_evaluate,
-            "3": client.test_list_evaluator_info
+            "3": client.test_list_evaluator_info,
+            "4": client.test_create_criteria
         }
         
         print("\nChoose a test to run:")
         for key, func in tests.items():
             print(f"{key}. {func.__name__}")
         
-        choice = input("\nEnter your choice (1-3): ")
+        choice = input("\nEnter your choice (1-4): ")
         if choice in tests:
             await tests[choice]()
         else:
