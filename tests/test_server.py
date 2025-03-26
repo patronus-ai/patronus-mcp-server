@@ -240,7 +240,6 @@ async def test_list_evaluator_info(mcp):
     # Call the tool
     response = await mcp.call_tool("list_evaluator_info", {})
     response_data = json.loads(response[0].text)
-    print("response_data", response_data)
     # Check basic response structure
     assert response_data["status"] == "success"
     assert isinstance(response_data["result"], dict)
@@ -284,7 +283,6 @@ async def test_create_criteria(mcp, create_criteria_request):
     """Test creating a new criteria"""
     response = await mcp.call_tool("create_criteria", create_criteria_request)
     response_data = json.loads(response[0].text)
-    print("response_data", response_data)
 
     assert response_data["status"] == "success"
     assert "result" in response_data
@@ -374,7 +372,6 @@ async def test_run_experiment_with_custom_evaluator(mcp):
 
     response = await mcp.call_tool("run_experiment", experiment_request)
     response_data = json.loads(response[0].text)
-    print("response_data", response_data)
 
     assert response_data["status"] == "error"
     assert "results" in response_data

@@ -141,7 +141,6 @@ def _import_adapter_class(class_name: str) -> Any:
 
 async def run_experiment(request: Request[ExperimentRequest]):
     try:
-        print("request", request)
         evaluators = []
         for config in request.data.evaluators:
             if isinstance(config, RemoteEvaluatorConfig):
