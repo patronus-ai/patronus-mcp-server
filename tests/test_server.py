@@ -45,8 +45,8 @@ def experiment_request():
         }],
         evaluators=[
             RemoteEvaluatorConfig(
-                name="patronus:hallucination",
-                criteria="lynx",
+                name="lynx",
+                criteria="patronus:hallucination",
                 explain_strategy="always"
             )
         ],
@@ -355,7 +355,7 @@ async def test_run_experiment_with_custom_evaluator(mcp):
 
     # Create experiment request with both remote and custom evaluators
     request = Request(data=ExperimentRequest(
-        project_name="Anand's Test Project",
+        project_name="test_project",
         experiment_name="test_experiment",
         dataset=dataset,
         evaluators=[
@@ -394,7 +394,7 @@ async def test_run_experiment_with_case_sensitive_custom_evaluator(mcp):
 
     # Create experiment request with case-sensitive custom evaluator
     request = Request(data=ExperimentRequest(
-        project_name="Anand's Test Project",
+        project_name="test_project",
         experiment_name="test_experiment",
         dataset=dataset,
         evaluators=[

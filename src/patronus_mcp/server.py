@@ -139,8 +139,9 @@ def _import_adapter_class(class_name: str) -> Any:
     except (ImportError, AttributeError) as e:
         raise ValueError(f"Failed to import adapter class {class_name}: {str(e)}")
 
-def run_experiment(request: Request[ExperimentRequest]):
+async def run_experiment(request: Request[ExperimentRequest]):
     try:
+        print("request", request)
         evaluators = []
         for config in request.data.evaluators:
             if isinstance(config, RemoteEvaluatorConfig):
@@ -158,7 +159,7 @@ def run_experiment(request: Request[ExperimentRequest]):
                 evaluators.append(adapter)
             else:
                 raise ValueError(f"Unsupported evaluator config type: {type(config)}")
-        
+
         fields = {
             "project_name",
             "experiment_name",
@@ -174,7 +175,7 @@ def run_experiment(request: Request[ExperimentRequest]):
             if getattr(request.data, field) is not None
         }
         
-        result = patronus.experiments.experiment.run_experiment(
+        result = await patronus.experiments.experiment.run_experiment(
             evaluators=evaluators,
             **experiment_kwargs
         )
