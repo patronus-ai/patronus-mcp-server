@@ -4,10 +4,13 @@ import os
 from src.patronus_mcp.server import (
     Request, EvaluationRequest, RemoteEvaluatorConfig, 
     ExperimentRequest, BatchEvaluationRequest, AsyncRemoteEvaluatorConfig, app_factory,
-    CreateCriteriaRequest
+    CreateCriteriaRequest, CustomEvaluatorConfig
 )
 from patronus import evaluator, EvaluationResult
 from typing import List
+from patronus.datasets import Row
+from patronus.experiments.types import TaskResult, EvalParent
+from patronus.experiments.adapters import FuncEvaluatorAdapter
 
 @pytest.fixture
 def mcp():
@@ -42,8 +45,8 @@ def experiment_request():
         }],
         evaluators=[
             RemoteEvaluatorConfig(
-                name="patronus:hallucination",
-                criteria="lynx",
+                name="lynx",
+                criteria="patronus:hallucination",
                 explain_strategy="always"
             )
         ],
@@ -105,6 +108,18 @@ def custom_evaluation_request_with_args():
     })
     return {"request": request.model_dump()}
 
+@pytest.fixture
+def custom_experiment_request():
+    """Fixture for experiment requests with custom evaluators"""
+    def _create_request(dataset, evaluators):
+        return Request(data=ExperimentRequest(
+            project_name="test_project",
+            experiment_name="test_experiment",
+            dataset=dataset,
+            evaluators=evaluators
+        ))
+    return _create_request
+
 @evaluator()
 def is_concise(output: str) -> bool:
     """Simple evaluator that checks if the output is concise"""
@@ -121,6 +136,40 @@ def has_score(output: str, context: List[str]) -> EvaluationResult:
         metadata={"context_length": len(context)},
         tags={"quality": "high_score"}
     )
+
+@evaluator()
+def exact_match(expected: str, actual: str, case_sensitive: bool = False) -> bool:
+    """
+    Checks if actual text exactly matches expected text.
+    """
+    if not case_sensitive:
+        return expected.lower() == actual.lower()
+    return expected == actual
+
+# Custom adapter class
+class ExactMatchAdapter(FuncEvaluatorAdapter):
+    def __init__(self, case_sensitive: bool = False):
+        super().__init__(exact_match)
+        self.case_sensitive = case_sensitive
+
+    def transform(
+        self,
+        row: Row,
+        task_result: TaskResult,
+        parent: EvalParent,
+        **kwargs
+    ) -> tuple[list, dict]:
+        # Create arguments list and dict for the evaluator function
+        args = []  # No positional arguments in this case
+
+        # Create keyword arguments matching the evaluator's parameters
+        evaluator_kwargs = {
+            "expected": row.gold_answer,
+            "actual": task_result.output if task_result else "",
+            "case_sensitive": self.case_sensitive
+        }
+        return args, evaluator_kwargs
+    
 
 async def test_evaluate(mcp, evaluation_request):
     response = await mcp.call_tool("evaluate", evaluation_request)
@@ -191,7 +240,6 @@ async def test_list_evaluator_info(mcp):
     # Call the tool
     response = await mcp.call_tool("list_evaluator_info", {})
     response_data = json.loads(response[0].text)
-    print("response_data", response_data)
     # Check basic response structure
     assert response_data["status"] == "success"
     assert isinstance(response_data["result"], dict)
@@ -233,10 +281,8 @@ async def test_list_evaluator_info_no_client():
 
 async def test_create_criteria(mcp, create_criteria_request):
     """Test creating a new criteria"""
-    print("create_criteria_request", create_criteria_request)
     response = await mcp.call_tool("create_criteria", create_criteria_request)
     response_data = json.loads(response[0].text)
-    print("response_data", response_data)
 
     assert response_data["status"] == "success"
     assert "result" in response_data
@@ -289,3 +335,81 @@ async def test_custom_evaluate_invalid_function(mcp):
     response = await mcp.call_tool("custom_evaluate", {"request": request.model_dump()})
     response_data = json.loads(response[0].text)
     assert response_data["status"] == "error"
+
+async def test_run_experiment_with_custom_evaluator(mcp):
+    # Create a sample dataset
+    dataset = [
+        {
+            "input": "What is 2+2?",
+            "output": "4",
+            "gold_answer": "4"
+        },
+        {
+            "input": "What is 3+3?",
+            "output": "6",
+            "gold_answer": "6"
+        }
+    ]
+
+    # Create experiment request with both remote and custom evaluators
+    request = Request(data=ExperimentRequest(
+        project_name="test_project",
+        experiment_name="test_experiment",
+        dataset=dataset,
+        evaluators=[
+            RemoteEvaluatorConfig(
+                name="judge",
+                criteria="patronus:is-concise"
+            ),
+            CustomEvaluatorConfig(
+                adapter_class="tests.test_server.ExactMatchAdapter",
+                adapter_kwargs={"case_sensitive": False}
+            )
+        ],
+        api_key=os.environ.get("PATRONUS_API_KEY")
+    ))
+    experiment_request = {"request": request.model_dump()}
+
+    response = await mcp.call_tool("run_experiment", experiment_request)
+    response_data = json.loads(response[0].text)
+
+    assert response_data["status"] == "error"
+    assert "results" in response_data
+    
+    results = response_data["results"]
+    assert len(results) > 0 
+
+async def test_run_experiment_with_case_sensitive_custom_evaluator(mcp):
+    # Create a sample dataset with case differences
+    dataset = [
+        {
+            "input": "What is 2+2?",
+            "output": "FOUR",
+            "gold_answer": "four"
+        }
+    ]
+
+    # Create experiment request with case-sensitive custom evaluator
+    request = Request(data=ExperimentRequest(
+        project_name="test_project",
+        experiment_name="test_experiment",
+        dataset=dataset,
+        evaluators=[
+            CustomEvaluatorConfig(
+                adapter_class="tests.test_server.ExactMatchAdapter",
+                adapter_kwargs={"case_sensitive": True}
+            )
+        ],
+        api_key=os.environ.get("PATRONUS_API_KEY")
+    ))
+    experiment_request = {"request": request.model_dump()}
+
+    response = await mcp.call_tool("run_experiment", experiment_request)
+    response_data = json.loads(response[0].text)
+
+    assert response_data["status"] == "success"
+    assert "results" in response_data
+
+    results = response_data["results"]
+    assert len(results) > 0 
+    
