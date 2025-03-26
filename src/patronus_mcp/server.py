@@ -8,8 +8,7 @@ from pydantic import BaseModel
 import patronus, patronus.evals, patronus.experiments.experiment 
 from typing import Optional, List, Dict, Any, Literal, Generic, TypeVar, Union
 from patronus.api.api_client import PatronusAPIClient
-from patronus.api.api_types import ListEvaluatorsResponse, ListCriteriaResponse
-from patronus import evaluator, EvaluationResult
+from patronus import EvaluationResult
 
 T = TypeVar('T')
 
@@ -40,6 +39,10 @@ class AsyncRemoteEvaluatorConfig(BaseModel):
     allow_update: Optional[bool] = False
     max_attempts: Optional[int] = 3
 
+class CustomEvaluatorConfig(BaseModel):
+    adapter_class: str  # Fully qualified name of the adapter class
+    adapter_kwargs: Optional[Dict[str, Any]] = None  # Arguments to pass to adapter constructor
+
 class EvaluationRequest(BaseModel):
     evaluator: RemoteEvaluatorConfig
     system_prompt: Optional[str] = None
@@ -54,7 +57,7 @@ class ExperimentRequest(BaseModel):
     project_name: str
     experiment_name: str
     dataset: List[Dict[str, Any]]  
-    evaluators: List[RemoteEvaluatorConfig]
+    evaluators: List[Union[RemoteEvaluatorConfig, CustomEvaluatorConfig]]
     tags: Optional[Dict[str, str]] = None
     max_concurrency: int = 10
     api_key: Optional[str] = None
@@ -127,12 +130,34 @@ def evaluate(request: Request[EvaluationRequest]):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+def _import_adapter_class(class_name: str) -> Any:
+    """Import an adapter class from its fully qualified name."""
+    try:
+        module_path, class_name = class_name.rsplit('.', 1)
+        module = __import__(module_path, fromlist=[class_name])
+        return getattr(module, class_name)
+    except (ImportError, AttributeError) as e:
+        raise ValueError(f"Failed to import adapter class {class_name}: {str(e)}")
+
 def run_experiment(request: Request[ExperimentRequest]):
     try:
-        evaluators = [
-            _create_evaluator(config)
-            for config in request.data.evaluators
-        ]
+        evaluators = []
+        for config in request.data.evaluators:
+            if isinstance(config, RemoteEvaluatorConfig):
+                evaluators.append(_create_evaluator(config))
+            elif isinstance(config, CustomEvaluatorConfig):
+                # Import and instantiate the adapter class
+                adapter_class = _import_adapter_class(config.adapter_class)
+                adapter_kwargs = config.adapter_kwargs or {}
+                adapter = adapter_class(**adapter_kwargs)
+                
+                # Verify the adapter has a transform method
+                if not hasattr(adapter, 'transform'):
+                    raise ValueError(f"Adapter class {config.adapter_class} must have a transform method")
+                
+                evaluators.append(adapter)
+            else:
+                raise ValueError(f"Unsupported evaluator config type: {type(config)}")
         
         fields = {
             "project_name",

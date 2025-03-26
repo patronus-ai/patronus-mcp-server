@@ -133,25 +133,61 @@ response = await mcp.call_tool("batch_evaluate", {"request": request.model_dump(
 #### Run Experiment
 
 ```python
-from patronus_mcp.server import Request, ExperimentRequest, RemoteEvaluatorConfig
+from patronus_mcp import Request, ExperimentRequest, RemoteEvaluatorConfig, CustomEvaluatorConfig
 
+# Create a custom evaluator function
+@evaluator()
+def exact_match(expected: str, actual: str, case_sensitive: bool = False) -> bool:
+    if not case_sensitive:
+        return expected.lower() == actual.lower()
+    return expected == actual
+
+# Create a custom adapter class
+class ExactMatchAdapter(FuncEvaluatorAdapter):
+    def __init__(self, case_sensitive: bool = False):
+        super().__init__(exact_match)
+        self.case_sensitive = case_sensitive
+
+    def transform(self, row, task_result, parent, **kwargs):
+        args = []
+        evaluator_kwargs = {
+            "expected": row.gold_answer,
+            "actual": task_result.output if task_result else "",
+            "case_sensitive": self.case_sensitive
+        }
+        return args, evaluator_kwargs
+
+# Create experiment request
 request = Request(data=ExperimentRequest(
-    project_name="MyProject",
-    experiment_name="MyExperiment",
+    project_name="my_project",
+    experiment_name="my_experiment",
     dataset=[{
-        "task_input": "What is the capital of France?",
-        "task_output": "Paris is the capital of France."
-        "task_context"=["The capital of France is Paris."],
+        "input": "What is 2+2?",
+        "output": "4",
+        "gold_answer": "4"
     }],
     evaluators=[
+        # Remote evaluator
         RemoteEvaluatorConfig(
-            name="lynx",
-            criteria="patronus:hallucination",
-            explain_strategy="always"
+            name="judge",
+            criteria="patronus:is-concise"
+        ),
+        # Custom evaluator
+        CustomEvaluatorConfig(
+            adapter_class="my_module.ExactMatchAdapter",
+            adapter_kwargs={"case_sensitive": False}
         )
     ]
 ))
+
+# Run the experiment
 response = await mcp.call_tool("run_experiment", {"request": request.model_dump()})
+response_data = json.loads(response[0].text)
+
+# The experiment runs asynchronously, so results will be pending initially
+assert response_data["status"] == "success"
+assert "results" in response_data
+assert isinstance(response_data["results"], str)  # Results will be a string (pending)
 ```
 
 #### List Evaluator Info
