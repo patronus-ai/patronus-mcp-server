@@ -1,6 +1,7 @@
 import argparse
 import os 
 import httpx
+import json
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
@@ -8,6 +9,7 @@ import patronus, patronus.evals, patronus.experiments.experiment
 from typing import Optional, List, Dict, Any, Literal, Generic, TypeVar, Union
 from patronus.api.api_client import PatronusAPIClient
 from patronus.api.api_types import ListEvaluatorsResponse, ListCriteriaResponse
+from patronus import evaluator, EvaluationResult
 
 T = TypeVar('T')
 
@@ -310,7 +312,81 @@ def list_evaluator_info(patronus_client: PatronusAPIClient = None) -> Dict[str, 
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-def app_factory(patronus_api_key: str, patronus_api_url: str) -> FastMCP:
+def custom_evaluate(request: Request[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Evaluate using a custom evaluator function.
+    Args:
+        request: Request object containing:
+            - evaluator_function: The evaluator function to use
+            - args: List of arguments to pass to the evaluator function
+    Returns:
+        Dictionary containing the evaluation result
+    """
+    try:
+        # Get the evaluator function and arguments
+        evaluator_func = request.data["evaluator_function"]
+        args = request.data.get("args", [])
+
+        # Run the evaluation
+        result = evaluator_func(*args)
+
+        # Convert result to standard format
+        if isinstance(result, EvaluationResult):
+            return {
+                "status": "success",
+                "result": {
+                    "score": result.score,
+                    "pass_": result.pass_,
+                    "text_output": result.text_output,
+                    "explanation": result.explanation,
+                    "metadata": result.metadata,
+                    "tags": result.tags
+                }
+            }
+        elif isinstance(result, bool):
+            return {
+                "status": "success",
+                "result": {
+                    "score": 1.0 if result else 0.0,
+                    "pass_": result,
+                    "text_output": "Pass" if result else "Fail",
+                    "explanation": "Boolean evaluation result",
+                    "metadata": {},
+                    "tags": {}
+                }
+            }
+        elif isinstance(result, (int, float)):
+            return {
+                "status": "success",
+                "result": {
+                    "score": float(result),
+                    "pass_": result >= 0.7,  # Default threshold
+                    "text_output": f"Score: {result}",
+                    "explanation": "Numeric evaluation result",
+                    "metadata": {},
+                    "tags": {}
+                }
+            }
+        elif isinstance(result, str):
+            return {
+                "status": "success",
+                "result": {
+                    "score": 1.0,
+                    "pass_": True,
+                    "text_output": result,
+                    "explanation": "Text evaluation result",
+                    "metadata": {},
+                    "tags": {}
+                }
+            }
+        else:
+            return {"status": "error", "message": f"Unsupported result type: {type(result)}"}
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+def app_factory(patronus_api_key: str = None, patronus_api_url: str = "https://api.patronus.ai") -> FastMCP:
+    """Create the MCP application"""
     patronus.init(
         api_key=patronus_api_key,
         api_url=patronus_api_url
@@ -330,6 +406,7 @@ def app_factory(patronus_api_key: str, patronus_api_url: str) -> FastMCP:
     mcp.tool()(batch_evaluate)
     mcp.tool(name="list_evaluator_info")(lambda: list_evaluator_info(patronus_client=patronus_client))
     mcp.tool(name="create_criteria")(lambda request: create_criteria(request, patronus_client=patronus_client))
+    mcp.tool()(custom_evaluate)
 
     return mcp
 

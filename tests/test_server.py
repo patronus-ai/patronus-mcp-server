@@ -6,6 +6,8 @@ from src.patronus_mcp.server import (
     ExperimentRequest, BatchEvaluationRequest, AsyncRemoteEvaluatorConfig, app_factory,
     CreateCriteriaRequest
 )
+from patronus import evaluator, EvaluationResult
+from typing import List
 
 @pytest.fixture
 def mcp():
@@ -85,6 +87,40 @@ def create_criteria_request():
     ))
     return {"request": request.model_dump()}
 
+@pytest.fixture
+def custom_evaluation_request():
+    """Fixture for custom evaluation request"""
+    request = Request(data={
+        "evaluator_function": is_concise,
+        "args": ["Paris is the capital of France."]
+    })
+    return {"request": request.model_dump()}
+
+@pytest.fixture
+def custom_evaluation_request_with_args():
+    """Fixture for custom evaluation request with additional arguments"""
+    request = Request(data={
+        "evaluator_function": has_score,
+        "args": ["Paris is the capital of France.", ["The capital of France is Paris."]]
+    })
+    return {"request": request.model_dump()}
+
+@evaluator()
+def is_concise(output: str) -> bool:
+    """Simple evaluator that checks if the output is concise"""
+    return len(output.split()) < 10
+
+@evaluator()
+def has_score(output: str, context: List[str]) -> EvaluationResult:
+    """Evaluator that returns a score based on context"""
+    return EvaluationResult(
+        score=0.8,
+        pass_=True,
+        text_output="Good match",
+        explanation="Output matches context well",
+        metadata={"context_length": len(context)},
+        tags={"quality": "high_score"}
+    )
 
 async def test_evaluate(mcp, evaluation_request):
     response = await mcp.call_tool("evaluate", evaluation_request)
@@ -213,5 +249,43 @@ async def test_create_criteria_no_client(create_criteria_request):
     )
     
     response = await mcp_no_client.call_tool("create_criteria", create_criteria_request)
+    response_data = json.loads(response[0].text)
+    assert response_data["status"] == "error"
+
+async def test_custom_evaluate(mcp, custom_evaluation_request):
+    """Test custom evaluation with a simple boolean evaluator"""
+    response = await mcp.call_tool("custom_evaluate", custom_evaluation_request)
+    response_data = json.loads(response[0].text)
+    assert response_data["status"] == "success"
+    assert "result" in response_data
+    result = response_data["result"]
+    assert "score" in result
+    assert "pass_" in result
+    assert "text_output" in result
+    assert "explanation" in result
+    assert "metadata" in result
+    assert "tags" in result
+
+async def test_custom_evaluate_with_args(mcp, custom_evaluation_request_with_args):
+    """Test custom evaluation with an evaluator that returns EvaluationResult"""
+    response = await mcp.call_tool("custom_evaluate", custom_evaluation_request_with_args)
+    response_data = json.loads(response[0].text)
+    assert response_data["status"] == "success"
+    assert "result" in response_data
+    result = response_data["result"]
+    assert result["score"] == 0.8
+    assert result["pass_"] is True
+    assert result["text_output"] == "Good match"
+    assert result["explanation"] == "Output matches context well"
+    assert result["metadata"]["context_length"] == 1
+    assert "quality" in result["tags"]
+
+async def test_custom_evaluate_invalid_function(mcp):
+    """Test custom evaluation with an invalid evaluator function"""
+    request = Request(data={
+        "evaluator_function": "invalid_function",
+        "args": ["Paris is the capital of France."]
+    })
+    response = await mcp.call_tool("custom_evaluate", {"request": request.model_dump()})
     response_data = json.loads(response[0].text)
     assert response_data["status"] == "error"

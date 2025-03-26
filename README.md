@@ -227,6 +227,78 @@ Returns:
 }
 ```
 
+#### Custom Evaluate
+
+Evaluates a task output using a custom evaluator function decorated with `@evaluator`.
+
+```python
+{
+    "request": {
+        "data": {
+            "task_input": "What is the capital of France?",
+            "task_context": ["The capital of France is Paris."],
+            "task_output": "Paris is the capital of France.",
+            "evaluator_function": "is_concise",
+            "evaluator_args": {
+                "threshold": 0.7
+            }
+        }
+    }
+}
+```
+
+Parameters:
+- `task_input` (str): The input prompt
+- `task_context` (List[str], optional): Context information for the evaluation
+- `task_output` (str): The output to evaluate
+- `evaluator_function` (str): Name of the evaluator function to use (must be decorated with `@evaluator`)
+- `evaluator_args` (Dict[str, Any], optional): Additional arguments for the evaluator function
+
+The evaluator function can return:
+- `bool`: Simple pass/fail result
+- `int` or `float`: Numeric score (pass threshold is 0.7)
+- `str`: Text output
+- `EvaluationResult`: Full evaluation result with score, pass status, explanation, etc.
+
+Returns:
+```python
+{
+    "status": "success",
+    "result": {
+        "score": 0.8,
+        "pass_": true,
+        "text_output": "Good match",
+        "explanation": "Output matches context well",
+        "metadata": {
+            "context_length": 1
+        },
+        "tags": ["high_score"]
+    }
+}
+```
+
+Example evaluator function:
+```python
+from patronus import evaluator, EvaluationResult
+
+@evaluator
+def is_concise(output: str) -> bool:
+    """Simple evaluator that checks if the output is concise"""
+    return len(output.split()) < 10
+
+@evaluator
+def has_score(output: str, context: List[str]) -> EvaluationResult:
+    """Evaluator that returns a score based on context"""
+    return EvaluationResult(
+        score=0.8,
+        pass_=True,
+        text_output="Good match",
+        explanation="Output matches context well",
+        metadata={"context_length": len(context)},
+        tags=["high_score"]
+    )
+```
+
 ## Development
 
 ### Project Structure
